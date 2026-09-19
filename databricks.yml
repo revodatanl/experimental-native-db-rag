@@ -1,0 +1,19 @@
+bundle:
+  name: native-db-rag
+  databricks_cli_version: ">= 1.3.0"
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog that holds everything this bundle creates.
+    default: main
+  schema:
+    description: Schema for the raw Confluence tables and everything derived from them.
+    default: confluence_rag
+
+targets:
+  dev:
+    mode: development
+    default: true
