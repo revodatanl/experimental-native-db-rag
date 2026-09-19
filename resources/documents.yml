@@ -5,11 +5,10 @@ resources:
       catalog: ${var.catalog}
       schema: ${resources.schemas.rag.name}
       serverless: true
-      # PREVIEW runs Databricks Runtime 18, which ai_prep_search needs.
-      channel: PREVIEW
+      channel: PREVIEW  # Databricks Runtime 18, which ai_prep_search needs
       libraries:
-        - notebook:
-            path: ../src/documents.py
+        - glob:
+            include: ../src/confluence_rag/pipelines/*.py
       environment:
         dependencies:
           - markdownify
@@ -18,6 +17,6 @@ resources:
         schema: ${resources.schemas.rag.name}
         confluence_wiki_url: ${var.confluence_wiki_url}
         confluence_username: ${var.confluence_username}
-        secret_scope: ${var.secret_scope}
-        secret_key: ${var.secret_key}
-        vision_endpoint: ${var.vision_endpoint}
+        # Resolved from the secret scope by the pipeline; never in code or logs.
+        confluence_api_token: "{{secrets/confluence/api-token}}"
+        llm_endpoint: ${var.llm_endpoint}

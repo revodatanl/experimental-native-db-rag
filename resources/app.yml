@@ -1,18 +1,9 @@
-# Step 5: the product. One Databricks App from Databricks' agent-langgraph template.
-#
-# `uv run start-app` (scripts/start_app.py, from the template) starts two
-# processes in one container: the agent server on port 8000, which is the port
-# Databricks Apps routes to, and the chat UI (Databricks' e2e-chatbot-app-next
-# template, cloned at start) on port 3000. The agent server proxies the UI and
-# forwards /invocations to the agent. Chat history is ephemeral: no database.
+# Step 5: one Databricks App, from Databricks' agent-langgraph template.
 #
 # The app calls the model endpoint and queries the index as its own service
-# principal. The endpoint grant is declared below. The index grant is applied
-# by the refresh job (src/index.py) right after it creates the index, because
-# a grant cannot be declared on something that does not exist yet.
-#
-# Org-wide access is one permission line: CAN_USE for `account users`, the same
-# setting as the console's "anyone in my organization can use".
+# principal. The endpoint grant is declared here; the index grant is applied by
+# the refresh job right after it creates the index, because a grant cannot be
+# declared on something that does not exist yet.
 resources:
   experiments:
     traces:
@@ -20,9 +11,10 @@ resources:
 
   apps:
     chat:
-      name: ${var.app_name}
+      name: confluence-rag
       description: "Ask the wiki: a LangGraph agent with one search tool, behind Databricks' chat UI."
       source_code_path: ../
+      # Anyone in the organization can use the app.
       permissions:
         - level: CAN_USE
           group_name: account users
@@ -35,12 +27,6 @@ resources:
             value: databricks-uc
           - name: MLFLOW_EXPERIMENT_ID
             value_from: experiment
-          - name: API_PROXY
-            value: http://localhost:8000/invocations
-          - name: CHAT_APP_PORT
-            value: "3000"
-          - name: CHAT_PROXY_TIMEOUT_SECONDS
-            value: "300"
           - name: LLM_ENDPOINT
             value: ${var.llm_endpoint}
           - name: VECTOR_SEARCH_INDEX
@@ -49,7 +35,7 @@ resources:
         - name: experiment
           experiment:
             experiment_id: ${resources.experiments.traces.id}
-            permission: CAN_MANAGE
+            permission: CAN_EDIT
         - name: llm
           serving_endpoint:
             name: ${var.llm_endpoint}
