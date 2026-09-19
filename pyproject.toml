@@ -4,4 +4,25 @@ version = "0.1.0"
 description = "Chat with your Confluence wiki on Databricks, built from native building blocks only."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+# The agent server, taken from Databricks' agent-langgraph app template.
+dependencies = [
+    "fastapi>=0.129.0",
+    "uvicorn>=0.41.0",
+    "databricks-langchain>=0.17.0",
+    "mlflow>=3.10.0",
+    "langgraph>=1.1.0",
+    "python-dotenv>=1.2.1",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.25.0",
+]
+
+[project.scripts]
+start-app = "scripts.start_app:main"
+start-server = "agent_server.start_server:main"
+preflight = "scripts.preflight:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agent_server", "scripts"]

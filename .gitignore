@@ -10,3 +10,9 @@ __pycache__/
 # Editors and OS
 .vscode/
 .DS_Store
+
+# App runtime artifacts (the chat UI is cloned at start, see scripts/start_app.py)
+e2e-chatbot-app-next/
+node_modules/
+*.log
+mlruns/
