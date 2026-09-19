@@ -175,3 +175,39 @@ def page_documents():
         .withColumn("content", F.aggregate(F.coalesce("images", F.array()), F.col("body"), inline_description))
         .select("id", "title", F.col("web_url").alias("path"), "modifiedAt", "content")
     )
+
+
+# COMMAND ----------
+
+# ## Chunks: `ai_prep_search` does the splitting
+#
+# One function replaces a tokenizer, a text splitter and their settings. It
+# returns two texts per chunk: `chunk_to_embed` (enriched with the title and
+# section headers, for the index) and `chunk_to_retrieve` (the plain chunk,
+# for the model). Page chunks are recomputed with the pages; attachment
+# chunks are computed once per file.
+
+
+def chunks(documents, text, prefix):
+    """Explode ai_prep_search output into one row per chunk with a stable id."""
+    return (
+        documents.withColumn("prep", F.expr(f"ai_prep_search({text})"))
+        .select("id", "path", F.explode(F.variant_get("prep", "$.document.contents", "array<variant>")).alias("chunk"))
+        .select(
+            F.concat(F.lit(prefix), "id", F.lit("-"), F.variant_get("chunk", "$.chunk_position", "int")).alias("chunk_id"),
+            "path",
+            F.variant_get("chunk", "$.chunk_to_embed", "string").alias("chunk_to_embed"),
+            F.variant_get("chunk", "$.chunk_to_retrieve", "string").alias("chunk_to_retrieve"),
+        )
+    )
+
+
+@dp.materialized_view(comment="Page chunks from ai_prep_search; recomputed with the pages.")
+def page_chunks():
+    return chunks(spark.read.table("page_documents"), "content", "page-")
+
+
+@dp.table(comment="Attachment chunks from ai_prep_search; computed once per file.")
+def attachment_chunks():
+    documents = spark.readStream.table("attachment_parsed").withColumn("path", F.col("web_url"))
+    return chunks(documents, "parsed", "attachment-")

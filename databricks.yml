@@ -30,6 +30,12 @@ variables:
   vision_endpoint:
     description: Model serving endpoint that describes images.
     default: databricks-claude-sonnet-4-6
+  embedding_endpoint:
+    description: Embedding model endpoint the vector index uses.
+    default: databricks-gte-large-en
+  vector_search_endpoint:
+    description: Name of the vector search endpoint that hosts the index.
+    default: confluence-rag
 
 targets:
   dev:
