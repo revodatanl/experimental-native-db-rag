@@ -1,0 +1,21 @@
+resources:
+  pipelines:
+    documents:
+      name: ${bundle.name}-documents
+      catalog: ${var.catalog}
+      schema: ${resources.schemas.rag.name}
+      serverless: true
+      libraries:
+        - notebook:
+            path: ../src/documents.py
+      environment:
+        dependencies:
+          - markdownify
+      configuration:
+        catalog: ${var.catalog}
+        schema: ${resources.schemas.rag.name}
+        confluence_wiki_url: ${var.confluence_wiki_url}
+        confluence_username: ${var.confluence_username}
+        secret_scope: ${var.secret_scope}
+        secret_key: ${var.secret_key}
+        vision_endpoint: ${var.vision_endpoint}
