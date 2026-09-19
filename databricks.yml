@@ -1,0 +1,23 @@
+bundle:
+  name: experimental-native-db-rag
+
+include:
+  - resources/*.yml
+
+# Every setting a reader has to change lives here. Override any of them per
+# deploy with --var="name=value".
+variables:
+  catalog:
+    description: Unity Catalog catalog that holds everything this bundle creates.
+    default: main
+  schema:
+    description: Schema for the raw Confluence tables and everything derived from them.
+    default: confluence_rag
+
+targets:
+  # Development mode prefixes resource names with your user name, so several
+  # people can deploy the same bundle into one workspace without collisions.
+  # The workspace host comes from the CLI profile you pass with --profile.
+  dev:
+    mode: development
+    default: true

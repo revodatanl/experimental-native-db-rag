@@ -1,0 +1,7 @@
+[project]
+name = "experimental-native-db-rag"
+version = "0.1.0"
+description = "Chat with your Confluence wiki on Databricks, built from native building blocks only."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []

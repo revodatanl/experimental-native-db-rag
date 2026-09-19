@@ -1,5 +1,12 @@
-.databricks/
-.venv/
+# Python
 __pycache__/
+*.py[oc]
+.venv/
+
+# Databricks bundle state and local secrets
+.databricks/
 .env
+
+# Editors and OS
+.vscode/
 .DS_Store
