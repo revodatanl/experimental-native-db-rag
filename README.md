@@ -6,11 +6,12 @@ only.
 ```text
 databricks.yml                     five variables, one target
 resources/                         one file per step
-src/confluence_rag/
-  pipelines/documents.py           the whole documents pipeline
-  index.py                         merge chunks, create or sync the index, grant the app
+src/confluence_rag/                the package, built as a wheel at deploy time
+  pipelines/documents.py           pipeline notebook: declares the datasets
+  documents.py                     the transformations behind them
+  jobs/refresh_index.py            job notebook: merge chunks, create or sync the index, grant the app
+  index.py                         the three steps behind it
   agent/agent.py                   the agent: one tool, two handlers
-  agent/prompts.py                 the system prompt
   agent/server.py                  MLflow's agent server
   app.py                           starts the server and the chat UI in one container
 ```
@@ -117,7 +118,7 @@ Run the agent locally with `cp .env.example .env`, fill it in, and
 
 ## What is not here, on purpose
 
-- No prompt registry. The prompt is a constant in `agent/prompts.py`; change
+- No prompt registry. The prompt is a constant in `agent/agent.py`; change
   it and redeploy.
 - No custom chunker or tokenizer. `ai_prep_search` decides chunk boundaries.
 - No chat history store. The UI's Lakebase mode is off.

@@ -1,9 +1,3 @@
-# Step 5: one Databricks App, from Databricks' agent-langgraph template.
-#
-# The app calls the model endpoint and queries the index as its own service
-# principal. The endpoint grant is declared here; the index grant is applied by
-# the refresh job right after it creates the index, because a grant cannot be
-# declared on something that does not exist yet.
 resources:
   experiments:
     traces:

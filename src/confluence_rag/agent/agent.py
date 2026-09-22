@@ -24,12 +24,12 @@ from mlflow.types.responses import (
     to_chat_completions_input,
 )
 
-from confluence_rag.agent.prompts import SYSTEM_PROMPT
-
 mlflow.langchain.autolog()
 
-# Hybrid search: wiki questions are full of exact names and codes that embeddings blur.
-# The SDK client carries the app's service principal credentials.
+SYSTEM_PROMPT = """You answer questions about the company wiki.
+Always call search_wiki before answering. If the results look thin, search again with a reformulated query.
+Answer only from the results, and list the source paths you used. Say so when the wiki does not contain the answer."""
+
 search_wiki = VectorSearchRetrieverTool(
     index_name=os.environ["VECTOR_SEARCH_INDEX"],
     workspace_client=WorkspaceClient(),
@@ -63,7 +63,8 @@ async def stream_handler(request: ResponsesAgentRequest) -> AsyncGenerator[Respo
     Args:
         request: The Responses API request from the chat UI.
 
-    Yields:
+    Yields
+    ------
         Responses API stream events.
     """
     if sid := session_id(request):
@@ -87,7 +88,8 @@ async def invoke_handler(request: ResponsesAgentRequest) -> ResponsesAgentRespon
     Args:
         request: The Responses API request.
 
-    Returns:
+    Returns
+    -------
         The completed output items.
     """
     items = [event.item async for event in stream_handler(request) if event.type == "response.output_item.done"]
