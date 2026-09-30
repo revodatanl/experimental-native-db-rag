@@ -2,7 +2,10 @@
 
 1. Merge the pipeline's chunk tables into one `chunks` table with Change Data Feed
    on. A merge, not an overwrite: unchanged chunks produce no change events, so the
-   index embeds only what changed.
+   index embeds only what changed. A chunk counts as changed when its path or its
+   text does; chunk_to_embed is left out because ai_prep_search rewords its LLM
+   context on every run. The path carries the page title or file name, so a rename
+   still counts.
 2. Create the Delta Sync index on the first run, sync it on every later run. The
    index is created here rather than in the bundle because it cannot exist before
    its source table does, and only running code creates the table.
@@ -46,8 +49,7 @@ def merge_chunks(spark: SparkSession, schema: str) -> str:
         ) AS source
         ON target.chunk_id = source.chunk_id
         WHEN MATCHED AND NOT (
-            struct(target.path, target.chunk_to_embed, target.chunk_to_retrieve)
-            <=> struct(source.path, source.chunk_to_embed, source.chunk_to_retrieve)
+            struct(target.path, target.chunk_to_retrieve) <=> struct(source.path, source.chunk_to_retrieve)
         ) THEN UPDATE SET *
         WHEN NOT MATCHED THEN INSERT *
         WHEN NOT MATCHED BY SOURCE THEN DELETE

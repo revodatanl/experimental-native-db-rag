@@ -79,8 +79,8 @@ One job, three tasks:
    which is how edits and deletions get in, for pages and attachments alike.
 3. **index**: merges the chunk tables into `chunks` (Change Data Feed on),
    creates the `chunks_index` Delta Sync index on the first run and syncs it on
-   later runs, and grants the app read access to it. Only changed chunks
-   produce change events, so only those are re-embedded.
+   later runs, and grants the app read access to it. Only chunks whose text or
+   path changed produce change events, so only those are re-embedded.
 
 Measured on a 1,300-page wiki with 1,500 attachments, first run: downloads 19
 minutes, image descriptions 4 minutes, parsing 9 minutes, page chunking 20

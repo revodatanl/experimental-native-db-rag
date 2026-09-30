@@ -136,18 +136,25 @@ def chunks(documents: DataFrame, text: str, prefix: str) -> DataFrame:
     """Split `text` with ai_prep_search into one row per chunk with a stable `chunk_id`.
 
     One function replaces a tokenizer, a text splitter and their settings. It returns
-    two texts per chunk: chunk_to_embed (enriched with the title and section headers,
-    for the index) and chunk_to_retrieve (the plain chunk, for the model).
+    two texts per chunk: chunk_to_embed (the chunk with context an LLM writes, for the
+    index) and chunk_to_retrieve (the plain chunk, for the model). ai_prep_search
+    leaves the title out of Markdown input, so it is prepended to chunk_to_embed here.
     """
+    title = F.concat(F.lit("Document Title: "), "title")
     return (
         documents.withColumn("prep", F.expr(f"ai_prep_search({text})"))
-        .select("id", "path", F.explode(F.variant_get("prep", "$.document.contents", "array<variant>")).alias("chunk"))
+        .select(
+            "id",
+            "path",
+            "title",
+            F.explode(F.variant_get("prep", "$.document.contents", "array<variant>")).alias("chunk"),
+        )
         .select(
             F.concat(F.lit(prefix), "id", F.lit("-"), F.variant_get("chunk", "$.chunk_position", "int")).alias(
                 "chunk_id"
             ),
             "path",
-            F.variant_get("chunk", "$.chunk_to_embed", "string").alias("chunk_to_embed"),
+            F.concat_ws("\n", title, F.variant_get("chunk", "$.chunk_to_embed", "string")).alias("chunk_to_embed"),
             F.variant_get("chunk", "$.chunk_to_retrieve", "string").alias("chunk_to_retrieve"),
         )
     )
