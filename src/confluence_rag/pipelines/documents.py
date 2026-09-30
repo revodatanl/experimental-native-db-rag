@@ -2,19 +2,20 @@
 # MAGIC %md
 # MAGIC # Documents
 # MAGIC
-# MAGIC Turns the connector's raw Confluence tables into documents and chunks:
+# MAGIC Turns the connector's raw Confluence tables into documents:
 # MAGIC
 # MAGIC - **pages** become Markdown. Every image on a page is described by a vision
 # MAGIC   model, and the description is inlined exactly where the image sits, so a
 # MAGIC   diagram is retrievable in the context of the text around it.
 # MAGIC - **attachments** (PDF, Word, PowerPoint) are downloaded once and parsed once
 # MAGIC   with `ai_parse_document`.
-# MAGIC - `ai_prep_search` splits pages and parsed attachments into chunks.
 # MAGIC
 # MAGIC Expensive work (download, vision model, parsing) happens in streaming tables, so
-# MAGIC each file is processed once. Everything after that is a materialized view and is
-# MAGIC recomputed on every run, which is how edits and deletions get in. A re-uploaded
-# MAGIC version of an existing attachment needs a full refresh of this pipeline.
+# MAGIC each file is processed once. The two document tables are materialized views and
+# MAGIC are recomputed on every run, which is how edits and deletions get in. A
+# MAGIC re-uploaded version of an existing attachment needs a full refresh of this
+# MAGIC pipeline. Chunking happens in the index task, which chunks only the documents
+# MAGIC that changed.
 # MAGIC
 # MAGIC This notebook only declares the datasets. The transformations live in
 # MAGIC `confluence_rag.documents`, installed in the pipeline's environment as the wheel
@@ -71,7 +72,7 @@ def attachment_parsed() -> DataFrame:
 
 # COMMAND ----------
 
-# MAGIC %md ## Pages and chunks: recomputed every run
+# MAGIC %md ## Documents: recomputed every run
 
 # COMMAND ----------
 
@@ -82,13 +83,7 @@ def page_documents() -> DataFrame:
     return documents.page_documents(spark.read.table(f"{raw}.pages"), spark.read.table("image_descriptions"))
 
 
-@dp.materialized_view(comment="Page chunks from ai_prep_search; recomputed with the pages.")
-def page_chunks() -> DataFrame:
-    """Chunk the current pages."""
-    return documents.chunks(spark.read.table("page_documents"), "content", "page-")
-
-
-@dp.materialized_view(comment="Attachment chunks from ai_prep_search; only attachments the wiki still shows.")
-def attachment_chunks() -> DataFrame:
-    """Chunk the parsed attachments that still exist in the wiki."""
-    return documents.attachment_chunks(spark.read.table("attachment_parsed"), spark.read.table(f"{raw}.attachments"))
+@dp.materialized_view(comment="Parsed attachments the wiki still shows.")
+def attachment_documents() -> DataFrame:
+    """Keep the parsed attachments that still exist in the wiki."""
+    return documents.attachment_documents(spark.read.table("attachment_parsed"), spark.read.table(f"{raw}.attachments"))
