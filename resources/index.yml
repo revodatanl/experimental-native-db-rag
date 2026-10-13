@@ -27,6 +27,7 @@ resources:
               catalog: ${var.catalog}
               schema: ${resources.schemas.rag.name}
               vector_search_endpoint: ${resources.vector_search_endpoints.vs.name}
+              app_name: ${resources.apps.chat.name}
 
       # Nightly, shipped paused: unpause in the Jobs UI when the wiki should stay fresh.
       schedule:

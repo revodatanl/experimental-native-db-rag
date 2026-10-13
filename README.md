@@ -19,7 +19,12 @@ databricks bundle deploy --profile <profile>
 ```
 
 The first deploy also creates the vector search endpoint, which takes a few
-minutes to come online.
+minutes to come online. Deploying uploads the app's code but does not start
+it; start it once (later deploys of new code need the same command):
+
+```bash
+databricks bundle run chat --profile <profile>
+```
 
 ## Load the wiki
 
@@ -39,14 +44,37 @@ One job, three tasks:
    removes the pages that left the wiki, and touches only the chunks that
    changed. Only pages are used: the connector does not ship attachment files,
    so images and attachments are left out.
-3. **index**: creates the `chunks_index` Delta Sync index on the first run and
-   syncs it on later runs. Only changed chunks produce change events, so only
-   those are re-embedded.
+3. **index**: creates the `chunks_index` Delta Sync index on the first run,
+   syncs it on later runs, and grants the app read access to it. Only changed
+   chunks produce change events, so only those are re-embedded.
 
 On a 1,300-page wiki the first run chunks for about 20 minutes; later runs chunk
 only the pages that changed. The initial embedding of the index runs in the
 background after the job. The job is scheduled nightly and ships paused;
 unpause it in the Jobs UI when you want the wiki to stay fresh.
+
+## Use it
+
+Open the URL that `bundle run chat` printed and ask something only your wiki
+knows. The agent is one file, `src/confluence_rag/agent.py`: a LangGraph agent
+whose only tool, `search_wiki`, runs a hybrid search on the index and returns
+each hit's `chunk_to_retrieve` and path. The model decides how to phrase the
+search, searches again when results are thin, and cites the paths it used.
+Answers stream token by token; every answer is traced in the MLflow experiment
+the bundle creates.
+
+The server is MLflow's `AgentServer`, from Databricks'
+[agent-langgraph](https://github.com/databricks/app-templates/tree/main/agent-langgraph)
+template. The chat UI is Databricks'
+[e2e-chatbot-app-next](https://github.com/databricks/app-templates/tree/main/e2e-chatbot-app-next)
+template, cloned from GitHub and built with npm when the app starts, so the
+first start takes a few minutes and needs outbound access to GitHub.
+
+Everyone in the organization can open it: the bundle grants `CAN_USE` to
+`account users`, and users sign in with their Databricks SSO.
+
+Run the agent locally with `cp .env.example .env`, fill it in, and
+`uv run --env-file .env start-app`.
 
 ## Tear down
 
