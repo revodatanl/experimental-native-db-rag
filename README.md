@@ -9,7 +9,7 @@ resources/                         one file per step
 src/confluence_rag/                the package, built as a wheel at deploy time
   pipelines/documents.py           pipeline notebook: declares the datasets
   documents.py                     the transformations behind them
-  jobs/refresh_index.py            job notebook: merge chunks, create or sync the index, grant the app
+  jobs/refresh_index.py            job notebook: chunk, create or sync the index, grant the app
   index.py                         the three steps behind it
   agent/agent.py                   the agent: one tool, two handlers
   agent/server.py                  MLflow's agent server
@@ -73,19 +73,23 @@ One job, three tasks:
 2. **documents**: the pipeline adds `page_documents` (Markdown, one row per
    current page, image descriptions inlined), `attachment_parsed` (the
    `ai_parse_document` output, one row per PDF, Word or PowerPoint file), and
-   the two chunk tables from `ai_prep_search`. Files are downloaded and parsed
-   once; a re-uploaded version of an existing attachment is picked up by a
-   full refresh of the pipeline. Everything else is recomputed on every run,
-   which is how edits and deletions get in, for pages and attachments alike.
-3. **index**: merges the chunk tables into `chunks` (Change Data Feed on),
-   creates the `chunks_index` Delta Sync index on the first run and syncs it on
-   later runs, and grants the app read access to it. Only changed chunks
-   produce change events, so only those are re-embedded.
+   `attachment_documents` (the parsed attachments the wiki still shows). Files
+   are downloaded and parsed once; a re-uploaded version of an existing
+   attachment is picked up by a full refresh of the pipeline. The two document
+   tables are recomputed on every run, which is how edits and deletions get in,
+   for pages and attachments alike.
+3. **index**: chunks the documents with `ai_prep_search` into `chunks` (Change
+   Data Feed on), creates the `chunks_index` Delta Sync index on the first run
+   and syncs it on later runs, and grants the app read access to it. Each chunk
+   keeps a hash of its document; a run deletes the chunks of changed and
+   deleted documents and chunks only the new and changed ones, so only their
+   chunks are re-embedded.
 
 Measured on a 1,300-page wiki with 1,500 attachments, first run: downloads 19
 minutes, image descriptions 4 minutes, parsing 9 minutes, page chunking 20
 minutes, 4,100 chunks in total. Downloads, descriptions and parsing happen
-once; chunking repeats every run. The initial embedding of the index runs in
+once; chunking and embedding repeat only for documents that changed. The
+initial embedding of the index runs in
 the background after the job. The job is scheduled nightly and ships paused;
 unpause it in the Jobs UI when you want the wiki to stay fresh.
 

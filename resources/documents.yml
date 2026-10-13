@@ -5,7 +5,7 @@ resources:
       catalog: ${var.catalog}
       schema: ${resources.schemas.rag.name}
       serverless: true
-      channel: PREVIEW  # Databricks Runtime 18, which ai_prep_search needs
+      channel: PREVIEW
       libraries:
         - notebook:
             path: ../src/confluence_rag/pipelines/documents.py

@@ -132,33 +132,12 @@ def page_documents(pages: DataFrame, descriptions: DataFrame) -> DataFrame:
     )
 
 
-def chunks(documents: DataFrame, text: str, prefix: str) -> DataFrame:
-    """Split `text` with ai_prep_search into one row per chunk with a stable `chunk_id`.
-
-    One function replaces a tokenizer, a text splitter and their settings. It returns
-    two texts per chunk: chunk_to_embed (enriched with the title and section headers,
-    for the index) and chunk_to_retrieve (the plain chunk, for the model).
-    """
-    return (
-        documents.withColumn("prep", F.expr(f"ai_prep_search({text})"))
-        .select("id", "path", F.explode(F.variant_get("prep", "$.document.contents", "array<variant>")).alias("chunk"))
-        .select(
-            F.concat(F.lit(prefix), "id", F.lit("-"), F.variant_get("chunk", "$.chunk_position", "int")).alias(
-                "chunk_id"
-            ),
-            "path",
-            F.variant_get("chunk", "$.chunk_to_embed", "string").alias("chunk_to_embed"),
-            F.variant_get("chunk", "$.chunk_to_retrieve", "string").alias("chunk_to_retrieve"),
-        )
-    )
-
-
-def attachment_chunks(parsed: DataFrame, attachments: DataFrame) -> DataFrame:
-    """Chunk the parsed attachments that the wiki still shows.
+def attachment_documents(parsed: DataFrame, attachments: DataFrame) -> DataFrame:
+    """Keep the parsed attachments that the wiki still shows.
 
     The parsed table is a streaming table and never forgets a row, so the semi-join
     to the connector's current attachments is what lets deleted attachments leave the
     index on the next run.
     """
     live = current(attachments).select("id")
-    return chunks(parsed.join(live, "id", "left_semi").withColumn("path", F.col("web_url")), "parsed", "attachment-")
+    return parsed.join(live, "id", "left_semi").select("id", "title", F.col("web_url").alias("path"), "parsed")

@@ -1,15 +1,19 @@
-"""The three steps of the index task; the task itself is the notebook src/refresh_index.py.
+"""The three steps of the index task; the task itself is the notebook jobs/refresh_index.py.
 
-1. Merge the pipeline's chunk tables into one `chunks` table with Change Data Feed
-   on. A merge, not an overwrite: unchanged chunks produce no change events, so the
-   index embeds only what changed.
+1. Chunk the pipeline's two document tables into one `chunks` table with Change
+   Data Feed on. Every chunk carries its document's `version`, a hash of the
+   document's path, title and text. A run deletes the chunks whose version is gone
+   and chunks only the documents whose version is new, so ai_prep_search runs on
+   new and changed documents only and the index embeds only their chunks. The path
+   carries the page title or file name, so a rename is a change too.
 2. Create the Delta Sync index on the first run, sync it on every later run. The
    index is created here rather than in the bundle because it cannot exist before
    its source table does, and only running code creates the table.
 3. Grant the app's service principal read access to the index. Grants are
    idempotent, so this runs on every refresh.
 
-MERGE and GRANT have no DataFrame or Python API, so they stay SQL.
+DELETE and GRANT have no DataFrame or Python API, so they stay SQL. ai_prep_search
+has no Python binding, so it goes through F.expr.
 """
 
 from databricks.sdk import WorkspaceClient
@@ -20,38 +24,69 @@ from databricks.sdk.service.vectorsearch import (
     PipelineType,
     VectorIndexType,
 )
-from pyspark.sql import SparkSession
+from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import functions as F
 
 EMBEDDING_ENDPOINT = "databricks-gte-large-en"
 
 
-def merge_chunks(spark: SparkSession, schema: str) -> str:
-    """Upsert both chunk tables into `chunks`, delete vanished chunks, and return the table's full name."""
+def versioned(documents: DataFrame, text: str) -> DataFrame:
+    """Add `version`, a hash of what a document's chunks are built from: its path, title and text."""
+    return documents.withColumn("version", F.md5(F.concat_ws("\n", "path", "title", F.col(text).cast("string"))))
+
+
+def chunks(documents: DataFrame, text: str, prefix: str) -> DataFrame:
+    """Split `text` with ai_prep_search into one row per chunk with a stable `chunk_id`.
+
+    One function replaces a tokenizer, a text splitter and their settings. It returns
+    two texts per chunk: chunk_to_embed (the chunk with context an LLM writes, for the
+    index) and chunk_to_retrieve (the plain chunk, for the model). ai_prep_search
+    leaves the title out of Markdown input, so it is prepended to chunk_to_embed here.
+    """
+    title = F.concat(F.lit("Document Title: "), "title")
+    return (
+        documents.withColumn("prep", F.expr(f"ai_prep_search({text})"))
+        .select(
+            "id",
+            "version",
+            "path",
+            "title",
+            F.explode(F.variant_get("prep", "$.document.contents", "array<variant>")).alias("chunk"),
+        )
+        .select(
+            F.concat(F.lit(prefix), "id", F.lit("-"), F.variant_get("chunk", "$.chunk_position", "int")).alias(
+                "chunk_id"
+            ),
+            "version",
+            "path",
+            F.concat_ws("\n", title, F.variant_get("chunk", "$.chunk_to_embed", "string")).alias("chunk_to_embed"),
+            F.variant_get("chunk", "$.chunk_to_retrieve", "string").alias("chunk_to_retrieve"),
+        )
+    )
+
+
+def refresh_chunks(spark: SparkSession, schema: str) -> str:
+    """Chunk new and changed documents into `chunks`, delete stale chunks, and return the table's full name."""
     table = f"{schema}.chunks"
     spark.sql(f"""
         CREATE TABLE IF NOT EXISTS {table} (
             chunk_id STRING NOT NULL,
+            version STRING NOT NULL,
             path STRING,
             chunk_to_embed STRING,
             chunk_to_retrieve STRING
         )
         TBLPROPERTIES (delta.enableChangeDataFeed = true)
     """)
-    spark.sql(f"""
-        MERGE INTO {table} AS target
-        USING (
-            SELECT * FROM {schema}.page_chunks
-            UNION ALL
-            SELECT * FROM {schema}.attachment_chunks
-        ) AS source
-        ON target.chunk_id = source.chunk_id
-        WHEN MATCHED AND NOT (
-            struct(target.path, target.chunk_to_embed, target.chunk_to_retrieve)
-            <=> struct(source.path, source.chunk_to_embed, source.chunk_to_retrieve)
-        ) THEN UPDATE SET *
-        WHEN NOT MATCHED THEN INSERT *
-        WHEN NOT MATCHED BY SOURCE THEN DELETE
-    """)
+    pages = versioned(spark.read.table(f"{schema}.page_documents"), "content")
+    attachments = versioned(spark.read.table(f"{schema}.attachment_documents"), "parsed")
+    pages.select("version").union(attachments.select("version")).createOrReplaceTempView("versions")
+    spark.sql(f"DELETE FROM {table} WHERE version NOT IN (SELECT version FROM versions)")
+    known = spark.read.table(table).select("version")
+    new = chunks(pages.join(known, "version", "left_anti"), "content", "page-").union(
+        chunks(attachments.join(known, "version", "left_anti"), "parsed", "attachment-")
+    )
+    new.write.mode("append").saveAsTable(table)
     return table
 
 
