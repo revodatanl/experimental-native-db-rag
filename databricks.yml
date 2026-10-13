@@ -12,6 +12,9 @@ variables:
   schema:
     description: Schema for the raw Confluence tables and everything derived from them.
     default: confluence_rag
+  confluence_connection:
+    description: Name of the Unity Catalog connection of type Confluence (created once in Catalog Explorer).
+    default: confluence
 
 targets:
   dev:
