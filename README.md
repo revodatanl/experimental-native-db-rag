@@ -8,6 +8,7 @@ Chat with your Confluence wiki on Databricks, built from native building blocks 
 - [Databricks CLI](https://docs.databricks.com/dev-tools/cli/index.html)
 - A workspace with serverless compute, Lakeflow Connect, Vector Search, and Databricks Apps enabled.
 - A Unity Catalog catalog you can create schemas in (default `main`).
+- A Unity Catalog connection of type **Confluence** (here named `confluence`), created once in Catalog Explorer > Connections (OAuth needs a browser, so there is no CLI equivalent).
 
 ## Deploy
 
@@ -15,6 +16,14 @@ Chat with your Confluence wiki on Databricks, built from native building blocks 
 databricks bundle validate --profile <profile>
 databricks bundle deploy --profile <profile>
 ```
+
+## Load the wiki
+
+```bash
+databricks bundle run ingest --profile <profile>
+```
+
+The connector lands `pages`, `attachments`, `spaces` and a few smaller tables in the bundle's schema. Page bodies arrive in Confluence storage format (XHTML); attachments arrive as metadata plus a download link.
 
 ## Tear down
 
