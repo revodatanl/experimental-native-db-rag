@@ -18,15 +18,33 @@ databricks bundle validate --profile <profile>
 databricks bundle deploy --profile <profile>
 ```
 
+The first deploy also creates the vector search endpoint, which takes a few
+minutes to come online.
+
 ## Load the wiki
 
 ```bash
-databricks bundle run ingest --profile <profile>
+databricks bundle run refresh --profile <profile>
 ```
 
-The connector lands `pages`, `attachments`, `spaces` and a few smaller tables
-in the bundle's schema. Page bodies arrive in Confluence storage format
-(XHTML); attachments arrive as metadata plus a download link.
+One job, two tasks:
+
+1. **ingest**: the connector lands `pages`, `attachments`, `spaces` and a few
+   smaller tables in the bundle's schema. Page bodies arrive in Confluence
+   storage format (XHTML); attachments arrive as metadata plus a download link.
+   Only `pages` is used: the connector does not ship attachment files, so
+   images and attachments are left out.
+2. **index**: converts the current pages to Markdown, chunks them with
+   `ai_prep_search` into `chunks` (Change Data Feed on), and creates the
+   `chunks_index` Delta Sync index on the first run and syncs it on later runs.
+   Each chunk keeps a hash of its page; a run deletes the chunks of changed and
+   deleted pages and chunks only the new and changed ones, so only their chunks
+   are re-embedded.
+
+On a 1,300-page wiki the first run chunks for about 20 minutes; later runs
+chunk only what changed. The initial embedding of the index runs in the
+background after the job. The job is scheduled nightly and ships paused;
+unpause it in the Jobs UI when you want the wiki to stay fresh.
 
 ## Tear down
 
