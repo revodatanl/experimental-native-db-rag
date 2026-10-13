@@ -15,6 +15,21 @@ variables:
   confluence_connection:
     description: Name of the Unity Catalog connection of type Confluence (created once in Catalog Explorer).
     default: confluence
+  confluence_wiki_url:
+    description: Base URL of the wiki, used to download attachments, e.g. https://<site>.atlassian.net/wiki
+    default: https://CHANGE-ME.atlassian.net/wiki
+  confluence_username:
+    description: Atlassian account email that the API token belongs to.
+    default: CHANGE-ME@example.com
+  secret_scope:
+    description: Databricks secret scope holding the Confluence API token.
+    default: confluence
+  secret_key:
+    description: Key of the API token inside the secret scope.
+    default: api-token
+  vision_endpoint:
+    description: Model serving endpoint that describes images.
+    default: databricks-claude-sonnet-4-6
 
 targets:
   dev:
