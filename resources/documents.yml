@@ -1,0 +1,18 @@
+resources:
+  pipelines:
+    documents:
+      name: ${bundle.name}-documents
+      catalog: ${var.catalog}
+      schema: ${resources.schemas.rag.name}
+      serverless: true
+      # PREVIEW runs Databricks Runtime 18, which ai_prep_search needs.
+      channel: PREVIEW
+      libraries:
+        - notebook:
+            path: ../src/documents.py
+      environment:
+        dependencies:
+          - markdownify>=1.1.0
+      configuration:
+        catalog: ${var.catalog}
+        schema: ${resources.schemas.rag.name}
