@@ -22,11 +22,16 @@ databricks bundle deploy --profile <profile>
 
 ```bash
 databricks bundle run ingest --profile <profile>
+databricks bundle run documents --profile <profile>
 ```
 
 The connector lands `pages`, `attachments`, `spaces` and a few smaller tables
 in the bundle's schema. Page bodies arrive in Confluence storage format
 (XHTML); attachments arrive as metadata plus a download link.
+
+The documents pipeline adds `page_documents`: Markdown, one row per current
+page. Only pages are used: the connector does not ship attachment files, so
+images and attachments are left out.
 
 ## Tear down
 
