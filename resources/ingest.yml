@@ -1,0 +1,21 @@
+resources:
+  schemas:
+    rag:
+      catalog_name: ${var.catalog}
+      name: ${var.schema}
+      comment: Raw Confluence pages and everything derived from them.
+
+  pipelines:
+    ingest:
+      name: ${bundle.name}-ingest
+      catalog: ${var.catalog}
+      schema: ${resources.schemas.rag.name}
+      ingestion_definition:
+        connection_name: confluence
+        source_type: CONFLUENCE
+        objects:
+          - table:
+              source_schema: default
+              source_table: pages
+              destination_catalog: ${var.catalog}
+              destination_schema: ${resources.schemas.rag.name}
