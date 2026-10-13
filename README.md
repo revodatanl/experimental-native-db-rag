@@ -3,6 +3,18 @@
 Chat with your Confluence wiki on Databricks, built from native building blocks
 only.
 
+```text
+databricks.yml                     five variables, one target
+resources/                         one file per step
+src/confluence_rag/
+  pipelines/documents.py           the whole documents pipeline
+  index.py                         merge chunks, create or sync the index, grant the app
+  agent/agent.py                   the agent: one tool, two handlers
+  agent/prompts.py                 the system prompt
+  agent/server.py                  MLflow's agent server
+  app.py                           starts the server and the chat UI in one container
+```
+
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/) for the Python side.
@@ -10,8 +22,9 @@ only.
 - A workspace with serverless compute, Lakeflow Connect, Vector Search, and Databricks Apps enabled.
 - A Unity Catalog catalog you can create schemas in (default `main`).
 - A Unity Catalog connection of type **Confluence** named `confluence`, created once in Catalog Explorer > Connections (OAuth needs a browser, so there is no CLI equivalent).
-- A Confluence API token in a secret scope, for downloading attachments (the
-  connector only ships attachment metadata). `put-secret` prompts for the value:
+- A Confluence API token in secret scope `confluence` under key `api-token`,
+  for downloading attachments (the connector only ships attachment metadata).
+  `put-secret` prompts for the value:
 
   ```bash
   databricks secrets create-scope confluence --profile <profile>
@@ -20,17 +33,17 @@ only.
 
 ## Deploy
 
-Point the bundle at your wiki, then deploy:
+The wiki URL and the account the token belongs to have no default, so validate
+tells you if you forgot them:
 
 ```bash
-databricks bundle validate --profile <profile>
-databricks bundle deploy --profile <profile> \
+databricks bundle validate --profile <profile> \
   --var="confluence_wiki_url=https://<site>.atlassian.net/wiki" \
   --var="confluence_username=<you>@<company>.com"
+databricks bundle deploy --profile <profile> --var=... --var=...
 ```
 
-Or change the two `CHANGE-ME` defaults in `databricks.yml` once and deploy
-without the flags.
+Or give them a `default:` in `databricks.yml` once and drop the flags.
 
 The first deploy also creates the vector search endpoint, which takes a few
 minutes to come online. Deploying uploads the app's code but does not start
@@ -39,6 +52,11 @@ it; start it once (later deploys of new code need the same command):
 ```bash
 databricks bundle run chat --profile <profile>
 ```
+
+The default target runs in development mode, which prefixes every resource
+name with your user name: the schema becomes `dev_<you>_confluence_rag`, the
+app `dev-<you>-confluence-rag`, and so on. The bundle wires the prefixed names
+through, so nothing else changes.
 
 ## Load the wiki
 
@@ -56,8 +74,8 @@ One job, three tasks:
    `ai_parse_document` output, one row per PDF, Word or PowerPoint file), and
    the two chunk tables from `ai_prep_search`. Files are downloaded and parsed
    once; a re-uploaded version of an existing attachment is picked up by a
-   full refresh of the pipeline. Pages and their chunks are recomputed on
-   every run.
+   full refresh of the pipeline. Everything else is recomputed on every run,
+   which is how edits and deletions get in, for pages and attachments alike.
 3. **index**: merges the chunk tables into `chunks` (Change Data Feed on),
    creates the `chunks_index` Delta Sync index on the first run and syncs it on
    later runs, and grants the app read access to it. Only changed chunks
@@ -66,45 +84,47 @@ One job, three tasks:
 Measured on a 1,300-page wiki with 1,500 attachments, first run: downloads 19
 minutes, image descriptions 4 minutes, parsing 9 minutes, page chunking 20
 minutes, 4,100 chunks in total. Downloads, descriptions and parsing happen
-once; page chunking repeats every run. The initial embedding of the index runs
-in the background after the job. The job is scheduled nightly and ships paused;
+once; chunking repeats every run. The initial embedding of the index runs in
+the background after the job. The job is scheduled nightly and ships paused;
 unpause it in the Jobs UI when you want the wiki to stay fresh.
 
 ## Use it
 
 ```bash
-databricks apps get confluence-rag --profile <profile>   # prints the URL
+databricks apps list --profile <profile>   # the app and its URL
 ```
 
-Open the URL and ask something only your wiki knows. The app is Databricks'
-[agent-langgraph](https://github.com/databricks/app-templates/tree/main/agent-langgraph)
-template with one change, `agent_server/agent.py`: a LangGraph agent whose only
-tool, `search_wiki`, is a `VectorSearchRetrieverTool` doing hybrid search on
-the index. The model decides how to phrase the search, searches again when
-results are thin, and cites the paths it used. Every answer is traced in the
-MLflow experiment the bundle creates.
+Open the URL and ask something only your wiki knows. The agent is one file,
+`src/confluence_rag/agent/agent.py`: a LangGraph agent whose only tool,
+`search_wiki`, is a `VectorSearchRetrieverTool` doing hybrid search on the
+index. The model decides how to phrase the search, searches again when results
+are thin, and cites the paths it used. Answers stream token by token; every
+answer is traced in the MLflow experiment the bundle creates.
 
-The chat UI is Databricks'
+The server is MLflow's `AgentServer`, from Databricks'
+[agent-langgraph](https://github.com/databricks/app-templates/tree/main/agent-langgraph)
+template. The chat UI is Databricks'
 [e2e-chatbot-app-next](https://github.com/databricks/app-templates/tree/main/e2e-chatbot-app-next)
-template, cloned by the start script when the app starts. It runs in ephemeral
-mode: conversations live in the browser tab, nothing is stored.
+template, cloned from GitHub and built with npm when the app starts, so the
+first start takes a few minutes and needs outbound access to GitHub. It runs in
+ephemeral mode: conversations live in the browser tab, nothing is stored.
 
 Everyone in the organization can open it: the bundle grants `CAN_USE` to
 `account users`, and users sign in with their Databricks SSO.
 
 Run the agent locally with `cp .env.example .env`, fill it in, and
-`uv run start-app`; `uv run preflight` sends one test request.
+`uv run --env-file .env start-app`.
 
 ## What is not here, on purpose
 
-- No prompt registry. The prompt is a constant in `agent_server/agent.py`;
-  change it and redeploy.
+- No prompt registry. The prompt is a constant in `agent/prompts.py`; change
+  it and redeploy.
 - No custom chunker or tokenizer. `ai_prep_search` decides chunk boundaries.
 - No chat history store. The UI's Lakebase mode is off.
 - No evaluation loop yet.
-- From the agent template: the MCP tool discovery, Lakebase setup and
-  quickstart scripts, and the AI-assistant skill files were left out. The
-  template has them if you want them back.
+- From the agent template: the MCP tool discovery, Lakebase setup, the
+  pre-flight and quickstart scripts, and the AI-assistant skill files were left
+  out. The template has them if you want them back.
 
 ## Tear down
 

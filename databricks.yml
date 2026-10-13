@@ -12,36 +12,13 @@ variables:
   schema:
     description: Schema for the raw Confluence tables and everything derived from them.
     default: confluence_rag
-  confluence_connection:
-    description: Name of the Unity Catalog connection of type Confluence (created once in Catalog Explorer).
-    default: confluence
   confluence_wiki_url:
     description: Base URL of the wiki, used to download attachments, e.g. https://<site>.atlassian.net/wiki
-    default: https://CHANGE-ME.atlassian.net/wiki
   confluence_username:
-    description: Atlassian account email that the API token belongs to.
-    default: CHANGE-ME@example.com
-  secret_scope:
-    description: Databricks secret scope holding the Confluence API token.
-    default: confluence
-  secret_key:
-    description: Key of the API token inside the secret scope.
-    default: api-token
-  vision_endpoint:
-    description: Model serving endpoint that describes images.
-    default: databricks-claude-sonnet-4-6
-  embedding_endpoint:
-    description: Embedding model endpoint the vector index uses.
-    default: databricks-gte-large-en
-  vector_search_endpoint:
-    description: Name of the vector search endpoint that hosts the index.
-    default: confluence-rag
+    description: Atlassian account email that the API token in secret scope `confluence` belongs to.
   llm_endpoint:
-    description: Model serving endpoint that answers questions in the app.
-    default: databricks-claude-sonnet-4-5
-  app_name:
-    description: Name of the Databricks App; also the first part of its URL.
-    default: confluence-rag
+    description: Model serving endpoint that describes images and answers questions.
+    default: databricks-claude-sonnet-4-6
 
 targets:
   dev:

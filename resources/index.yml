@@ -1,18 +1,21 @@
-# Step 4: chunk, merge, index, and one job that runs the whole funnel.
+# Step 4: the vector search endpoint, and one job that runs the whole funnel.
 #
-# The vector search endpoint is declared here. The index itself is created by
-# src/index.py on the first run, because it cannot exist before its source
-# table does. Sync is TRIGGERED: the index refreshes when the job asks, not
-# continuously, so freshness equals the job's cadence and costs nothing between runs.
+# The index itself is created by src/confluence_rag/index.py on the first run,
+# because it cannot exist before its source table does. Sync is TRIGGERED: the
+# index refreshes when the job asks, so freshness equals the job's cadence.
 resources:
   vector_search_endpoints:
     vs:
-      name: ${var.vector_search_endpoint}
+      name: confluence-rag
       endpoint_type: STANDARD
 
   jobs:
     refresh:
       name: ${bundle.name}-refresh
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "4"
       tasks:
         - task_key: ingest
           pipeline_task:
@@ -27,14 +30,18 @@ resources:
         - task_key: index
           depends_on:
             - task_key: documents
-          notebook_task:
-            notebook_path: ../src/index.py
-            base_parameters:
-              catalog: ${var.catalog}
-              schema: ${resources.schemas.rag.name}
-              vector_search_endpoint: ${resources.vector_search_endpoints.vs.name}
-              embedding_endpoint: ${var.embedding_endpoint}
-              app_name: ${resources.apps.chat.name}
+          environment_key: serverless
+          spark_python_task:
+            python_file: ../src/confluence_rag/index.py
+            parameters:
+              - --catalog
+              - ${var.catalog}
+              - --schema
+              - ${resources.schemas.rag.name}
+              - --vector-search-endpoint
+              - ${resources.vector_search_endpoints.vs.name}
+              - --app-name
+              - ${resources.apps.chat.name}
 
       # Nightly, shipped paused: unpause in the Jobs UI when the wiki should stay fresh.
       schedule:

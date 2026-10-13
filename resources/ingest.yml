@@ -11,7 +11,7 @@ resources:
       catalog: ${var.catalog}
       schema: ${resources.schemas.rag.name}
       ingestion_definition:
-        connection_name: ${var.confluence_connection}
+        connection_name: confluence
         source_type: CONFLUENCE
         objects:
           - schema:
