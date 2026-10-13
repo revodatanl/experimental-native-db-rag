@@ -10,3 +10,9 @@ __pycache__/
 # Editors and OS
 .vscode/
 .DS_Store
+
+# The chat UI is cloned when the app starts (src/confluence_rag/app.py)
+e2e-chatbot-app-next/
+app-templates/
+node_modules/
+mlruns/

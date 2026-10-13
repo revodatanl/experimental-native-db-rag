@@ -16,6 +16,7 @@
 # MAGIC    later run. The index is created here rather than in the bundle because
 # MAGIC    it cannot exist before its source table does, and only running code can
 # MAGIC    create the table.
+# MAGIC 4. Grant the app's service principal read access to the index.
 
 # COMMAND ----------
 
@@ -34,6 +35,7 @@ from pyspark.sql.functions import udf
 catalog = dbutils.widgets.get("catalog")
 schema = f"{catalog}.{dbutils.widgets.get('schema')}"
 endpoint = dbutils.widgets.get("vector_search_endpoint")
+app_name = dbutils.widgets.get("app_name")
 
 chunks_table = f"{schema}.chunks"
 index_name = f"{schema}.chunks_index"
@@ -126,3 +128,19 @@ try:
 except ResourceAlreadyExists:
     w.vector_search_indexes.sync_index(index_name=index_name)
     print(f"Sync triggered for {index_name}.")
+
+# COMMAND ----------
+
+# ## Let the app read the index
+#
+# The app queries the index as its own service principal. GRANT has no Python
+# API, so this stays SQL. Grants are idempotent, so this runs on every refresh.
+
+principal = w.apps.get(app_name).service_principal_client_id
+for grant in (
+    f"USE CATALOG ON CATALOG {catalog}",
+    f"USE SCHEMA ON SCHEMA {schema}",
+    f"SELECT ON TABLE {index_name}",
+):
+    spark.sql(f"GRANT {grant} TO `{principal}`")
+print(f"App {app_name} can read {index_name}.")

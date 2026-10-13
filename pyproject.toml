@@ -3,5 +3,22 @@ name = "native-db-rag"
 version = "0.1.0"
 description = "Chat with your Confluence wiki on Databricks, built from native building blocks only."
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = []
+requires-python = ">=3.12,<3.13"
+# What the package imports directly. Everything else is transitive.
+dependencies = [
+    "databricks-langchain>=0.20.0",
+    "databricks-sdk>=0.140.0",
+    "langchain>=1.4.0",
+    "mlflow>=3.16.0",
+]
+
+[project.scripts]
+start-app = "confluence_rag.app:main"
+start-server = "confluence_rag.agent.server:main"
+
+[build-system]
+requires = ["uv_build>=0.10,<0.11"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "confluence_rag"

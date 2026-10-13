@@ -1,0 +1,36 @@
+resources:
+  experiments:
+    traces:
+      name: /Users/${workspace.current_user.userName}/${bundle.name}
+
+  apps:
+    chat:
+      name: confluence-rag
+      description: "Ask the wiki: a LangGraph agent with one search tool, behind Databricks' chat UI."
+      source_code_path: ../
+      # Anyone in the organization can use the app.
+      permissions:
+        - level: CAN_USE
+          group_name: account users
+      config:
+        command: ["uv", "run", "start-app"]
+        env:
+          - name: MLFLOW_TRACKING_URI
+            value: databricks
+          - name: MLFLOW_REGISTRY_URI
+            value: databricks-uc
+          - name: MLFLOW_EXPERIMENT_ID
+            value_from: experiment
+          - name: LLM_ENDPOINT
+            value: ${var.llm_endpoint}
+          - name: VECTOR_SEARCH_INDEX
+            value: ${var.catalog}.${resources.schemas.rag.name}.chunks_index
+      resources:
+        - name: experiment
+          experiment:
+            experiment_id: ${resources.experiments.traces.id}
+            permission: CAN_EDIT
+        - name: llm
+          serving_endpoint:
+            name: ${var.llm_endpoint}
+            permission: CAN_QUERY
