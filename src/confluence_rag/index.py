@@ -1,4 +1,4 @@
-"""Merge the chunk tables, then create or sync the vector index. Runs as a job task after the pipeline.
+"""The three steps of the index task; the task itself is the notebook src/refresh_index.py.
 
 1. Merge the pipeline's chunk tables into one `chunks` table with Change Data Feed
    on. A merge, not an overwrite: unchanged chunks produce no change events, so the
@@ -11,8 +11,6 @@
 
 MERGE and GRANT have no DataFrame or Python API, so they stay SQL.
 """
-
-import argparse
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import ResourceAlreadyExists
@@ -28,11 +26,7 @@ EMBEDDING_ENDPOINT = "databricks-gte-large-en"
 
 
 def merge_chunks(spark: SparkSession, schema: str) -> str:
-    """Upsert both chunk tables into `chunks`, deleting chunks that no longer exist.
-
-    Returns:
-        The fully qualified name of the chunks table.
-    """
+    """Upsert both chunk tables into `chunks`, delete vanished chunks, and return the table's full name."""
     table = f"{schema}.chunks"
     spark.sql(f"""
         CREATE TABLE IF NOT EXISTS {table} (
@@ -62,11 +56,7 @@ def merge_chunks(spark: SparkSession, schema: str) -> str:
 
 
 def create_or_sync_index(w: WorkspaceClient, chunks_table: str, endpoint: str) -> str:
-    """Create the Delta Sync index on the first run; trigger a sync on later runs.
-
-    Returns:
-        The fully qualified name of the index.
-    """
+    """Create the Delta Sync index on the first run, sync it on later runs, and return its full name."""
     index = f"{chunks_table}_index"
     try:
         w.vector_search_indexes.create_index(
@@ -99,25 +89,3 @@ def grant_app_access(spark: SparkSession, w: WorkspaceClient, catalog: str, sche
     ):
         spark.sql(f"GRANT {grant} TO `{principal}`")
     print(f"App {app} can read {index}.")
-
-
-def main() -> None:
-    """Parse the job parameters and run the three steps."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--catalog", required=True)
-    parser.add_argument("--schema", required=True)
-    parser.add_argument("--vector-search-endpoint", required=True)
-    parser.add_argument("--app-name", required=True)
-    args = parser.parse_args()
-
-    spark = SparkSession.builder.getOrCreate()
-    w = WorkspaceClient()
-    schema = f"{args.catalog}.{args.schema}"
-
-    chunks_table = merge_chunks(spark, schema)
-    index = create_or_sync_index(w, chunks_table, args.vector_search_endpoint)
-    grant_app_access(spark, w, args.catalog, schema, index, args.app_name)
-
-
-if __name__ == "__main__":
-    main()
