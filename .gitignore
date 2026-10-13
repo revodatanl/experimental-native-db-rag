@@ -11,8 +11,8 @@ __pycache__/
 .vscode/
 .DS_Store
 
-# App runtime artifacts (the chat UI is cloned at start, see scripts/start_app.py)
+# The chat UI is cloned when the app starts (src/confluence_rag/app.py)
 e2e-chatbot-app-next/
+app-templates/
 node_modules/
-*.log
 mlruns/
