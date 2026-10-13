@@ -34,6 +34,7 @@ resources:
               schema: ${resources.schemas.rag.name}
               vector_search_endpoint: ${resources.vector_search_endpoints.vs.name}
               embedding_endpoint: ${var.embedding_endpoint}
+              app_name: ${resources.apps.chat.name}
 
       # Nightly, shipped paused: unpause in the Jobs UI when the wiki should stay fresh.
       schedule:

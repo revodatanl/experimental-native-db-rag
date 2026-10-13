@@ -36,6 +36,12 @@ variables:
   vector_search_endpoint:
     description: Name of the vector search endpoint that hosts the index.
     default: confluence-rag
+  llm_endpoint:
+    description: Model serving endpoint that answers questions in the app.
+    default: databricks-claude-sonnet-4-5
+  app_name:
+    description: Name of the Databricks App; also the first part of its URL.
+    default: confluence-rag
 
 targets:
   dev:
