@@ -21,13 +21,21 @@ resources:
         - task_key: index
           depends_on:
             - task_key: documents
+          environment_key: default
           notebook_task:
-            notebook_path: ../src/index.py
+            notebook_path: ../src/confluence_rag/jobs/refresh_index.py
             base_parameters:
               catalog: ${var.catalog}
               schema: ${resources.schemas.rag.name}
               vector_search_endpoint: ${resources.vector_search_endpoints.vs.name}
               app_name: ${resources.apps.chat.name}
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "5"
+            dependencies:
+              - ../dist/*.whl
 
       # Nightly, shipped paused: unpause in the Jobs UI when the wiki should stay fresh.
       schedule:
