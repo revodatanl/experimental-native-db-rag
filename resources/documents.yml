@@ -9,10 +9,10 @@ resources:
       channel: PREVIEW
       libraries:
         - notebook:
-            path: ../src/documents.py
+            path: ../src/confluence_rag/pipelines/documents.py
       environment:
         dependencies:
-          - markdownify>=1.1.0
+          - ../dist/*.whl
       configuration:
         catalog: ${var.catalog}
         schema: ${resources.schemas.rag.name}
