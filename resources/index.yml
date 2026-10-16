@@ -1,0 +1,35 @@
+resources:
+  vector_search_endpoints:
+    vs:
+      name: confluence-rag
+      endpoint_type: STANDARD
+
+  jobs:
+    refresh:
+      name: ${bundle.name}-refresh
+      tasks:
+        - task_key: ingest
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.ingest.id}
+
+        - task_key: documents
+          depends_on:
+            - task_key: ingest
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.documents.id}
+
+        - task_key: index
+          depends_on:
+            - task_key: documents
+          notebook_task:
+            notebook_path: ../src/index.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${resources.schemas.rag.name}
+              vector_search_endpoint: ${resources.vector_search_endpoints.vs.name}
+
+      # Nightly, shipped paused: unpause in the Jobs UI when the wiki should stay fresh.
+      schedule:
+        quartz_cron_expression: "0 0 1 * * ?"
+        timezone_id: Europe/Amsterdam
+        pause_status: PAUSED
