@@ -69,7 +69,7 @@ dp.create_auto_cdc_flow(
 
 
 @dp.temporary_view()
-def page_chunks() -> DataFrame:
+def chunk_snapshot() -> DataFrame:
     """Explode every document's chunks into rows with a stable id."""
     return (
         spark.read.table("page_documents")
@@ -83,11 +83,11 @@ def page_chunks() -> DataFrame:
     )
 
 
-# Every run compares page_chunks with chunks: new chunks are inserted, changed ones
+# Every run compares chunk_snapshot with chunks: new chunks are inserted, changed ones
 # updated, missing ones deleted, unchanged ones left alone.
 dp.create_streaming_table(
     "chunks",
     comment="One row per chunk, the vector index's source.",
     table_properties={"delta.enableChangeDataFeed": "true"},
 )
-dp.create_auto_cdc_from_snapshot_flow(target="chunks", source="page_chunks", keys=["chunk_id"])
+dp.create_auto_cdc_from_snapshot_flow(target="chunks", source="chunk_snapshot", keys=["chunk_id"])
