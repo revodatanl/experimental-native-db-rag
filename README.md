@@ -7,7 +7,7 @@ Chat with your Confluence wiki on Databricks, built from native building blocks 
 - [uv](https://docs.astral.sh/uv/) for the Python side.
 - [Databricks CLI](https://docs.databricks.com/dev-tools/cli/index.html)
 - A workspace with serverless compute, Lakeflow Connect, Vector Search, and Databricks Apps enabled.
-- A Unity Catalog catalog you can create schemas in (default `main`).
+- A Unity Catalog catalog you can create schemas in (default `main`). The app's service principal needs `USE CATALOG` on it.
 - A Unity Catalog connection of type **Confluence** (here named `confluence`), created once in Catalog Explorer > Connections (OAuth needs a browser, so there is no CLI equivalent).
 
 ## Deploy
@@ -17,7 +17,24 @@ databricks bundle validate --profile <profile>
 databricks bundle deploy --profile <profile>
 ```
 
-The first deploy also creates the vector search endpoint, which takes a few minutes to come online.
+The first deploy also creates the vector search endpoint, which takes a few minutes to come online. Deploying uploads the app's code but does not start it; start it once (later deploys of new code need the same command):
+
+```bash
+databricks bundle run chat --profile <profile>
+```
+
+The principal exists once the app does, so the catalog grant comes after the first deploy. `main` grants `USE CATALOG` to `account users`, which includes service principals, so nothing is needed there. On another catalog, its owner runs:
+
+```bash
+# Look up the app's service principal.
+principal=$(databricks apps get confluence-rag -o json --profile <profile> | grep service_principal_client_id | cut -d '"' -f 4)
+
+# Let it use the catalog.
+databricks grants update catalog <catalog> --profile <profile> \
+  --json '{"changes": [{"principal": "'$principal'", "add": ["USE_CATALOG"]}]}'
+```
+
+`bundle destroy` deletes the principal with the app, so a later deploy needs the grant again. The schema grants need no such step: the bundle applies them on every deploy.
 
 ## Load the wiki
 
@@ -33,6 +50,14 @@ One job, three tasks:
 
 The first run processes everything; later runs chunk only the pages that changed. The initial embedding of the index runs in the background after the job.
 
+## Use it
+
+Open the URL that `bundle run chat` printed and ask something only your wiki knows. The agent is one file, `src/confluence_rag/agent.py`: a LangGraph agent whose only tool, `search_wiki`, runs a hybrid search on the index and returns each hit's `chunk_to_retrieve` and path. The model decides how to phrase the search, searches again when results are thin, and cites the paths it used. The search, its results, and the answer appear as each step finishes; every answer is traced in the MLflow experiment the bundle creates.
+
+The server is MLflow's `AgentServer`, from Databricks' [agent-langgraph](https://github.com/databricks/app-templates/tree/main/agent-langgraph) template. The chat UI is Databricks' [e2e-chatbot-app-next](https://github.com/databricks/app-templates/tree/main/e2e-chatbot-app-next) template, cloned from GitHub and built with npm when the app starts, so the first start takes a few minutes and needs outbound access to GitHub.
+
+The app searches as its own service principal: the bundle grants it `USE SCHEMA` and `SELECT` on the schema, which covers the index and anything added to the schema later. Everyone in the organization can open it: the bundle grants `CAN_USE` to `account users`, and users sign in with their Databricks SSO.
+
 ## Tear down
 
 ```bash
@@ -40,3 +65,13 @@ databricks bundle destroy --profile <profile>
 ```
 
 This deletes everything the bundle owns, including the schema and its data.
+
+## What is not here, on purpose
+
+- No attachments or images. The connector ships attachment metadata only, so the download step, the vision model (`ai_query`), `ai_parse_document`, the API token and its secret scope went with them. Image tags carry no text and drop out of the Markdown on their own.
+- No prompt registry. The prompt is a constant in `src/confluence_rag/agent.py`; change it and redeploy.
+- No chat history. The UI runs in ephemeral mode, so there is no Lakebase.
+- No per-user authorization. The app searches as its own service principal, so every user sees what the index holds.
+- No local runs. There is no `.env.example` and no local instructions; everything runs deployed.
+- No evaluation loop.
+- From the agent template: MCP tool discovery, Lakebase setup, the pre-flight and quickstart scripts, and the AI-assistant skill files were left out.

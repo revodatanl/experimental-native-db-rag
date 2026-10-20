@@ -4,6 +4,11 @@ resources:
       catalog_name: ${var.catalog}
       name: ${var.schema}
       comment: Raw Confluence tables and everything derived from them.
+      # The app reads the index as its own service principal. SELECT on the schema
+      # covers the index; USE CATALOG only the catalog's owner can grant (see README).
+      grants:
+        - principal: ${resources.apps.chat.service_principal_client_id}
+          privileges: [USE_SCHEMA, SELECT]
 
   pipelines:
     ingest:
