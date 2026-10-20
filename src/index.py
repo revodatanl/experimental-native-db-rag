@@ -5,7 +5,8 @@
 # MAGIC Runs after the documents pipeline: creates the Delta Sync vector index on
 # MAGIC `chunks` on the first run, syncs it on every later run. The index is created
 # MAGIC here rather than in the bundle because it cannot exist before its source
-# MAGIC table does, and the pipeline creates that table on its first run.
+# MAGIC table does, and the pipeline creates that table on its first run. The app's
+# MAGIC read access is a grant on the schema in the bundle, which covers the index.
 
 # COMMAND ----------
 
