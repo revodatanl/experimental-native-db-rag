@@ -5,6 +5,12 @@ bundle:
 include:
   - resources/*.yml
 
+# Built at deploy time; the pipeline and the job install it, so their notebooks import confluence_rag.
+artifacts:
+  confluence_rag:
+    type: whl
+    build: uv build --wheel
+
 variables:
   catalog:
     description: Unity Catalog catalog that holds everything this bundle creates.

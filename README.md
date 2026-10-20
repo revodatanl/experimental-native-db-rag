@@ -3,6 +3,18 @@
 Chat with your Confluence wiki on Databricks, built from native building blocks
 only.
 
+```text
+databricks.yml                     three variables, one target
+resources/                         one file per step
+src/confluence_rag/                the package, built as a wheel at deploy time
+  pipelines/documents.py           pipeline notebook: declares the datasets
+  documents.py                     the transformations behind it
+  jobs/refresh_index.py            job notebook: create or sync the index, grant the app
+  index.py                         the two steps behind it
+  agent.py                         the agent, one tool, streamed by MLflow's agent server
+  app.py                           starts the chat UI and the agent server in one container
+```
+
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/) for the Python side.

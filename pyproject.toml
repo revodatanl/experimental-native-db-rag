@@ -8,11 +8,16 @@ dependencies = [
     "databricks-langchain>=0.20.0",
     "databricks-sdk>=0.140.0",
     "langchain>=1.4.0",
+    "markdownify>=1.1.0",
     "mlflow>=3.16.0",
 ]
 
 [project.scripts]
 start-app = "confluence_rag.app:main"
+
+[dependency-groups]
+# databricks-connect brings pyspark, which the Databricks runtime provides.
+dev = ["databricks-connect", "pydoclint", "pytest", "ruff", "ty"]
 
 [build-system]
 requires = ["uv_build>=0.10,<0.11"]
@@ -20,3 +25,29 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-name = "confluence_rag"
+
+[tool.ruff]
+line-length = 120
+builtins = ["spark", "dbutils"]  # notebook globals (src/confluence_rag/pipelines, src/confluence_rag/jobs)
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812", # trailing commas: the formatter owns them
+]
+pydocstyle.convention = "numpy"
+
+[tool.ruff.lint.per-file-ignores]
+# Notebooks: the leading %md cell is the docstring.
+"src/confluence_rag/jobs/*.py" = ["D100"]
+"src/confluence_rag/pipelines/*.py" = ["D100"]
+
+[tool.pydoclint]
+style = "numpy"
+exclude = ".git|.venv|scratch"
+
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.src]
+exclude = ["scratch"]
