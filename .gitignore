@@ -10,7 +10,3 @@ __pycache__/
 # Editors and OS
 .vscode/
 .DS_Store
-
-# Local runs: the chat UI checkout (src/confluence_rag/app.py) and MLflow's trace store
-app-templates/
-mlflow.db

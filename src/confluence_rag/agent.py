@@ -12,13 +12,11 @@ import mlflow
 from databricks.sdk import WorkspaceClient
 from databricks_langchain import ChatDatabricks
 from langchain.agents import create_agent
-from langchain.messages import AIMessageChunk
 from langchain.tools import tool
 from mlflow.genai.agent_server import AgentServer, stream
 from mlflow.types.responses import (
     ResponsesAgentRequest,
     ResponsesAgentStreamEvent,
-    create_text_delta,
     output_to_responses_items_stream,
     to_chat_completions_input,
 )
@@ -54,20 +52,12 @@ agent = create_agent(
 
 @stream()
 async def stream_handler(request: ResponsesAgentRequest) -> AsyncGenerator[ResponsesAgentStreamEvent, None]:
-    """Stream text deltas as the model writes, and completed items as each step finishes."""
-    if request.context and request.context.conversation_id:
-        # Groups the traces of one chat in MLflow.
-        mlflow.update_current_trace(metadata={"mlflow.trace.session": request.context.conversation_id})
+    """Emit each step's completed items: the tool call, its results, and the answer."""
     messages = to_chat_completions_input([item.model_dump() for item in request.input])
-    async for mode, data in agent.astream({"messages": messages}, stream_mode=["updates", "messages"]):
-        if mode == "updates":
-            for node in data.values():
-                for event in output_to_responses_items_stream((node or {}).get("messages", [])):
-                    yield event
-        elif mode == "messages":
-            chunk = data[0]
-            if isinstance(chunk, AIMessageChunk) and chunk.content:
-                yield ResponsesAgentStreamEvent(**create_text_delta(delta=chunk.content, item_id=chunk.id))
+    async for step in agent.astream({"messages": messages}, stream_mode="updates"):
+        for node in step.values():
+            for event in output_to_responses_items_stream(node["messages"]):
+                yield event
 
 
 server = AgentServer("ResponsesAgent", enable_chat_proxy=True)

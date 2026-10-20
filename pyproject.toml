@@ -9,7 +9,6 @@ dependencies = [
     "databricks-sdk>=0.140.0",
     "langchain>=1.4.0",
     "mlflow>=3.16.0",
-    "uvicorn>=0.30.0",
 ]
 
 [project.scripts]

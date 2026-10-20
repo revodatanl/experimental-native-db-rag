@@ -1364,7 +1364,6 @@ dependencies = [
     { name = "databricks-sdk" },
     { name = "langchain" },
     { name = "mlflow" },
-    { name = "uvicorn" },
 ]
 
 [package.metadata]
@@ -1373,7 +1372,6 @@ requires-dist = [
     { name = "databricks-sdk", specifier = ">=0.140.0" },
     { name = "langchain", specifier = ">=1.4.0" },
     { name = "mlflow", specifier = ">=3.16.0" },
-    { name = "uvicorn", specifier = ">=0.30.0" },
 ]
 
 [[package]]

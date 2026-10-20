@@ -60,8 +60,8 @@ knows. The agent is one file, `src/confluence_rag/agent.py`: a LangGraph agent
 whose only tool, `search_wiki`, runs a hybrid search on the index and returns
 each hit's `chunk_to_retrieve` and path. The model decides how to phrase the
 search, searches again when results are thin, and cites the paths it used.
-Answers stream token by token; every answer is traced in the MLflow experiment
-the bundle creates.
+The search, its results, and the answer appear as each step finishes; every
+answer is traced in the MLflow experiment the bundle creates.
 
 The server is MLflow's `AgentServer`, from Databricks'
 [agent-langgraph](https://github.com/databricks/app-templates/tree/main/agent-langgraph)
@@ -72,9 +72,6 @@ first start takes a few minutes and needs outbound access to GitHub.
 
 Everyone in the organization can open it: the bundle grants `CAN_USE` to
 `account users`, and users sign in with their Databricks SSO.
-
-Run the agent locally with `cp .env.example .env`, fill it in, and
-`uv run --env-file .env start-app`.
 
 ## Tear down
 

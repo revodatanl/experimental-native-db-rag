@@ -11,8 +11,6 @@ import signal
 import subprocess
 from pathlib import Path
 
-import uvicorn
-
 from confluence_rag.agent import server
 
 UI_DIR = Path("app-templates/e2e-chatbot-app-next")
@@ -41,4 +39,4 @@ def main() -> None:
     """Entry point for `uv run start-app`: start the UI, then serve the agent."""
     setup_ui()
     start_ui()
-    uvicorn.run(server.app, host="0.0.0.0", port=8000)
+    server.run(app_import_string="confluence_rag.agent:server.app")
