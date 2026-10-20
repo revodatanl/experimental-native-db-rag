@@ -6,7 +6,7 @@
 # MAGIC `chunks` on the first run, syncs it on every later run. The index is created
 # MAGIC here rather than in the bundle because it cannot exist before its source
 # MAGIC table does, and the pipeline creates that table on its first run. Then
-# MAGIC grants the app's service principal read access to the index.
+# MAGIC grants the app's service principal read access to the schema.
 
 # COMMAND ----------
 
@@ -57,14 +57,15 @@ except ResourceAlreadyExists:
 
 # ## Let the app read the index
 #
-# The app queries the index as its own service principal. Grants are
-# idempotent, so this runs on every refresh.
+# The app queries the index as its own service principal. It gets USE SCHEMA and
+# SELECT on the schema, which covers the index and anything added to the schema
+# later. Grants are idempotent, so this runs on every refresh. USE CATALOG is not
+# granted here: only the catalog's owner can, and `main` gives it to everyone.
 
 principal = w.apps.get(app_name).service_principal_client_id
-for securable_type, full_name, privilege in (
-    ("catalog", catalog, Privilege.USE_CATALOG),
-    ("schema", f"{catalog}.{schema}", Privilege.USE_SCHEMA),
-    ("table", index_name, Privilege.SELECT),
-):
-    w.grants.update(securable_type, full_name, changes=[PermissionsChange(principal=principal, add=[privilege])])
+w.grants.update(
+    "schema",
+    f"{catalog}.{schema}",
+    changes=[PermissionsChange(principal=principal, add=[Privilege.USE_SCHEMA, Privilege.SELECT])],
+)
 print(f"App {app_name} can read {index_name}.")

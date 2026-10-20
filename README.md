@@ -8,7 +8,9 @@ only.
 - [uv](https://docs.astral.sh/uv/) for the Python side.
 - [Databricks CLI](https://docs.databricks.com/dev-tools/cli/index.html)
 - A workspace with serverless compute, Lakeflow Connect, Vector Search, and Databricks Apps enabled.
-- A Unity Catalog catalog you can create schemas in (default `main`).
+- A Unity Catalog catalog you can create schemas in (default `main`). The app's
+  service principal needs `USE CATALOG` on it: `main` grants that to all users by
+  default; on another catalog, its owner grants it once.
 - A Unity Catalog connection of type **Confluence** named `confluence`, created once in Catalog Explorer > Connections (OAuth needs a browser, so there is no CLI equivalent).
 
 ## Deploy
@@ -45,8 +47,8 @@ One job, three tasks:
    changed. Only pages are used: the connector does not ship attachment files,
    so images and attachments are left out.
 3. **index**: creates the `chunks_index` Delta Sync index on the first run,
-   syncs it on later runs, and grants the app read access to it. Only changed
-   chunks produce change events, so only those are re-embedded.
+   syncs it on later runs, and grants the app read access to the schema. Only
+   changed chunks produce change events, so only those are re-embedded.
 
 On a 1,300-page wiki the first run chunks for about 20 minutes; later runs chunk
 only the pages that changed. The initial embedding of the index runs in the
