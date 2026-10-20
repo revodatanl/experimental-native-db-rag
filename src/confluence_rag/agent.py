@@ -40,7 +40,8 @@ def search_wiki(query: str) -> list[dict]:
         query_type="HYBRID",
         num_results=5,
     )
-    return [{"text": text, "path": path} for text, path, _score in response.result.data_array or []]
+    rows = response.result.data_array if response.result else None
+    return [{"text": text, "path": path} for text, path, _score in rows or []]
 
 
 agent = create_agent(
