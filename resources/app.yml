@@ -8,10 +8,13 @@ resources:
       name: confluence-rag
       description: "Ask the wiki: a LangGraph agent with one search tool, behind Databricks' chat UI."
       source_code_path: ../
-      # Anyone in the organization can use the app.
       permissions:
         - level: CAN_USE
-          group_name: account users
+          group_name: ${var.users}
+      # The search runs as the signed-in user: Databricks forwards a token scoped to
+      # vector search with each request, and Unity Catalog applies their privileges.
+      user_api_scopes:
+        - vector-search
       config:
         command: ["uv", "run", "start-app"]
         env:

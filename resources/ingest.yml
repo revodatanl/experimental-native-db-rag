@@ -4,6 +4,11 @@ resources:
       catalog_name: ${var.catalog}
       name: ${var.schema}
       comment: Raw Confluence tables and everything derived from them.
+      # The app's users read the index as themselves. SELECT on the schema covers the
+      # index and anything added later; the deployer owns the schema, so this always applies.
+      grants:
+        - principal: ${var.users}
+          privileges: [USE_SCHEMA, SELECT]
 
   pipelines:
     ingest:

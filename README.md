@@ -8,10 +8,13 @@ only.
 - [uv](https://docs.astral.sh/uv/) for the Python side.
 - [Databricks CLI](https://docs.databricks.com/dev-tools/cli/index.html)
 - A workspace with serverless compute, Lakeflow Connect, Vector Search, and Databricks Apps enabled.
-- A Unity Catalog catalog you can create schemas in (default `main`). The app's
-  service principal needs `USE CATALOG` on it: `main` grants that to all users by
-  default; on another catalog, its owner grants it once.
+- A Unity Catalog catalog where you have `USE CATALOG` and `CREATE SCHEMA`
+  (default `main`). The app searches the index as the signed-in user, so the
+  app's users need `USE CATALOG` on it too: `main` grants that to all account
+  users by default; on another catalog, its owner grants it to the group once.
 - A Unity Catalog connection of type **Confluence** named `confluence`, created once in Catalog Explorer > Connections (OAuth needs a browser, so there is no CLI equivalent).
+- User authorization for Databricks Apps, with the `vector-search` scope allowed.
+  A workspace admin controls which scopes apps may request.
 
 ## Deploy
 
@@ -19,6 +22,9 @@ only.
 databricks bundle validate --profile <profile>
 databricks bundle deploy --profile <profile>
 ```
+
+The variables in `databricks.yml` pick the catalog, the schema, the connection
+and the group of users; override one with `--var="users=<group>"`.
 
 The first deploy also creates the vector search endpoint, which takes a few
 minutes to come online. Deploying uploads the app's code but does not start
@@ -46,9 +52,9 @@ One job, three tasks:
    removes the pages that left the wiki, and touches only the chunks that
    changed. Only pages are used: the connector does not ship attachment files,
    so images and attachments are left out.
-3. **index**: creates the `chunks_index` Delta Sync index on the first run,
-   syncs it on later runs, and grants the app read access to the schema. Only
-   changed chunks produce change events, so only those are re-embedded.
+3. **index**: creates the `chunks_index` Delta Sync index on the first run and
+   syncs it on later runs. Only changed chunks produce change events, so only
+   those are re-embedded.
 
 On a 1,300-page wiki the first run chunks for about 20 minutes; later runs chunk
 only the pages that changed. The initial embedding of the index runs in the
@@ -57,8 +63,8 @@ unpause it in the Jobs UI when you want the wiki to stay fresh.
 
 ## Use it
 
-Open the URL that `bundle run chat` printed and ask something only your wiki
-knows. The agent is one file, `src/confluence_rag/agent.py`: a LangGraph agent
+Open the URL that `bundle run chat` printed, consent once to the app searching
+on your behalf, and ask something only your wiki knows. The agent is one file, `src/confluence_rag/agent.py`: a LangGraph agent
 whose only tool, `search_wiki`, runs a hybrid search on the index and returns
 each hit's `chunk_to_retrieve` and path. The model decides how to phrase the
 search, searches again when results are thin, and cites the paths it used.
@@ -72,8 +78,12 @@ template. The chat UI is Databricks'
 template, cloned from GitHub and built with npm when the app starts, so the
 first start takes a few minutes and needs outbound access to GitHub.
 
-Everyone in the organization can open it: the bundle grants `CAN_USE` to
-`account users`, and users sign in with their Databricks SSO.
+The search runs as the signed-in user: Databricks Apps forwards a token scoped
+to vector search with each request, so Unity Catalog applies the user's own
+privileges and the app needs no grant of its own on the catalog. Everyone in
+the `users` group (default `account users`) can open it: the bundle grants the
+group `CAN_USE` on the app and `USE SCHEMA` and `SELECT` on the schema, and
+users sign in with their Databricks SSO.
 
 ## Tear down
 

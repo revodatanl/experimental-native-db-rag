@@ -15,6 +15,9 @@ variables:
   confluence_connection:
     description: Name of the Unity Catalog connection of type Confluence (created once in Catalog Explorer).
     default: confluence
+  users:
+    description: Group that may open the app. The search runs as the signed-in user, so the group also reads the schema.
+    default: account users
 
 targets:
   dev:
