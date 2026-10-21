@@ -9,8 +9,7 @@ only.
 - [Databricks CLI](https://docs.databricks.com/dev-tools/cli/index.html)
 - A workspace with serverless compute, Lakeflow Connect, Vector Search, and Databricks Apps enabled.
 - A Unity Catalog catalog you can create schemas in (default `main`). The app's
-  service principal needs `USE CATALOG` on it: `main` grants that to all users by
-  default; on another catalog, its owner grants it once.
+  service principal needs `USE CATALOG` on it.
 - A Unity Catalog connection of type **Confluence** named `confluence`, created once in Catalog Explorer > Connections (OAuth needs a browser, so there is no CLI equivalent).
 
 ## Deploy
@@ -27,6 +26,18 @@ it; start it once (later deploys of new code need the same command):
 ```bash
 databricks bundle run chat --profile <profile>
 ```
+
+The principal exists once the app does, so grant it after the first deploy:
+
+```bash
+databricks apps get confluence-rag --profile <profile> -o json | grep service_principal_client_id
+databricks grants update catalog <catalog> --profile <profile> \
+  --json '{"changes": [{"principal": "<service_principal_client_id>", "add": ["USE_CATALOG"]}]}'
+```
+
+`bundle destroy` deletes the principal with the app, so a later deploy needs
+the grant again. The schema grants need no such step: the bundle applies them
+on every deploy.
 
 ## Load the wiki
 
@@ -46,9 +57,9 @@ One job, three tasks:
    removes the pages that left the wiki, and touches only the chunks that
    changed. Only pages are used: the connector does not ship attachment files,
    so images and attachments are left out.
-3. **index**: creates the `chunks_index` Delta Sync index on the first run,
-   syncs it on later runs, and grants the app read access to the schema. Only
-   changed chunks produce change events, so only those are re-embedded.
+3. **index**: creates the `chunks_index` Delta Sync index on the first run and
+   syncs it on later runs. Only changed chunks produce change events, so only
+   those are re-embedded.
 
 On a 1,300-page wiki the first run chunks for about 20 minutes; later runs chunk
 only the pages that changed. The initial embedding of the index runs in the
@@ -72,8 +83,10 @@ template. The chat UI is Databricks'
 template, cloned from GitHub and built with npm when the app starts, so the
 first start takes a few minutes and needs outbound access to GitHub.
 
-Everyone in the organization can open it: the bundle grants `CAN_USE` to
-`account users`, and users sign in with their Databricks SSO.
+The app searches as its own service principal: the bundle grants it `USE SCHEMA`
+and `SELECT` on the schema, which covers the index and anything added to the
+schema later. Everyone in the organization can open it: the bundle grants
+`CAN_USE` to `account users`, and users sign in with their Databricks SSO.
 
 ## Tear down
 
