@@ -5,10 +5,12 @@ description = "Chat with your Confluence wiki on Databricks, built from native b
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "certifi>=2026.10.19",  # emSign CA compromise, Oct 2026
     "databricks-langchain>=0.20.0",
     "databricks-sdk>=0.140.0",
     "langchain>=1.4.0",
     "mlflow>=3.16.0",
+    "pandas>=2.3.3,<3",  # pandas 3.1 breaks pyspark.pandas on DBR 18
 ]
 
 [project.scripts]
@@ -17,6 +19,9 @@ start-app = "confluence_rag.app:main"
 [build-system]
 requires = ["uv_build>=0.10,<0.11"]
 build-backend = "uv_build"
+
+[tool.uv]
+required-version = ">=0.13.4"  # emSign CA compromise, Oct 2026
 
 [tool.uv.build-backend]
 module-name = "confluence_rag"
