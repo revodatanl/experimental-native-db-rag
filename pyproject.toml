@@ -9,6 +9,7 @@ dependencies = [
     "databricks-sdk>=0.140.0",
     "langchain>=1.4.0",
     "mlflow>=3.16.0",
+    "pandas>=2.3.3,<3",  # pandas 3.1 breaks pyspark.pandas on DBR 18
 ]
 
 [project.scripts]
