@@ -2,7 +2,7 @@
 
 I wanted to show what a minimal RAG looks like when built from native Databricks parts. It had to be a tool that is useful right away, yet simple to understand. So I built a chat app that answers questions from your company's Confluence wiki. The main design goal for this project is low cost. A naive RAG implementation re-chunks and re-embeds the whole wiki on every refresh, so there is a daily cost that grows with the size of the wiki. In this design, the pipeline streams and processes only the changes so that the cost stays minimal. On a test wiki, a daily update is more than 90% cheaper than a full refresh (see step 4).
 
-The components that build up the application are boiled down to the essentials: a managed Lakeflow connector to ingest the data, a serverless declarative pipeline that chunks the pages with `ai_prep_search`, an AI Search index to embed the chunks, and a LangChain agent behind Databricks' chat UI template. The whole thing is shipped as a single Databricks App.
+The app consists of a managed Lakeflow connector to ingest the data, a serverless declarative pipeline that chunks the pages with [`ai_prep_search`](https://docs.databricks.com/aws/en/sql/language-manual/functions/ai_prep_search), an AI Search index to embed the chunks, and a LangChain agent behind Databricks' chat UI template. The whole thing is shipped as a single Databricks App.
 
 ![From Confluence to the chat app](images/confluence_rag_architecture.png)
 
@@ -79,11 +79,60 @@ def to_markdown(xhtml: str | None) -> str:
 
 `to_markdown` is a Python UDF: Spark calls it once per row, and `markdownify` returns Markdown with `#` headings. Pages that hold only images come out empty, and the pipeline leaves them out.
 
-> **Note that images are missing from the documents.** Confluence stores every image as an attachment, and the connector ships no attachment files, which is a [known limitation](https://docs.databricks.com/aws/en/ingestion/lakeflow-connect/confluence-limits#content-ingestion) of the connector. Reading them takes an API token in a secret scope, a download step, a vision model through `ai_query`, and `ai_parse_document` for PDFs. I will cover this in a follow-up article.
+For example, take this page from the test wiki: [Recommended MLOps workflow by Databricks](https://docs.databricks.com/aws/en/machine-learning/mlops/mlops-workflow). Its body in storage format:
+
+```html
+<h3><strong>Recommended MLOps workflow by Databricks</strong></h3>
+<h4><strong>Development stage</strong></h4>
+<ul><li><p>Data integration</p></li><li><p>EDA</p></li><li><p>Code in repos</p></li><li><p>Creating and updating feature tables</p></li><li><p>Model training</p></li></ul>
+<ac:image ac:align="center" ac:layout="center" ac:original-height="600" ac:original-width="772"><ri:attachment ri:filename="image-20230123-123144.png" ri:version-at-save="1" /></ac:image>
+<h4><strong>Staging stage</strong></h4>
+...
+```
+
+And this is the same part after `to_markdown`:
+
+```markdown
+### **Recommended MLOps workflow by Databricks**
+
+#### **Development stage**
+
+* Data integration
+* EDA
+* Code in repos
+* Creating and updating feature tables
+* Model training
+
+#### **Staging stage**
+...
+```
+
+**Note that images are missing from the documents.** Confluence stores every image as an attachment that are not ingested, which is a [known limitation](https://docs.databricks.com/aws/en/ingestion/lakeflow-connect/confluence-limits#content-ingestion) of the connector. Reading them takes an API token in a secret scope, a download step, a vision model through [`ai_query`](https://docs.databricks.com/aws/en/sql/language-manual/functions/ai_query), and [`ai_parse_document`](https://docs.databricks.com/aws/en/sql/language-manual/functions/ai_parse_document) for PDFs. I will cover this in a follow-up article.
 
 ### Chunking with `ai_prep_search`
 
-[`ai_prep_search`](https://docs.databricks.com/aws/en/sql/language-manual/functions/ai_prep_search) is a SQL function that takes a document and returns search-ready chunks. It accepts plain text or Markdown. It splits a document into semantic chunks and returns two texts per chunk. `chunk_to_retrieve` is the raw chunk text, which the language model reads. `chunk_to_embed` is the same text with added context, which the index embeds. The context consists of the document title, the section header and other structural labels. It also holds document fields that an LLM picks per document, such as "Company" or "Document Type", and one LLM-written sentence on what the document is about. Chunks with a table also get a table summary and questions the table can answer.
+[`ai_prep_search`](https://docs.databricks.com/aws/en/sql/language-manual/functions/ai_prep_search) is a SQL function that takes a document and returns search-ready chunks. It accepts plain text or Markdown. It splits a document into semantic chunks and returns two texts per chunk. `chunk_to_retrieve` is the raw chunk text, which the language model reads. `chunk_to_embed` is the same text with added context, which the index embeds. For a Markdown page, that context is a few document fields that an LLM picks per document, such as "Company" or "Document Type", and one LLM-written sentence on what the document is about.
+
+Take for instance the MLOps page from the previous section. Its `chunk_to_retrieve` is the unchanged Markdown above. Its `chunk_to_embed` puts three fields and one sentence in front of it:
+
+```text
+Category: MLOps
+Company: Databricks
+Subject: Recommended MLOps workflow
+
+Databricks created a recommended MLOps workflow guide.
+
+Content:
+
+### **Recommended MLOps workflow by Databricks**
+
+#### **Development stage**
+
+* Data integration
+...
+```
+
+An LLM chose the field names `Category`, `Company` and `Subject` for this page.
 
 The function is in Beta and needs Databricks Runtime 18.2 or above, so the documents pipeline runs on the `PREVIEW` channel. There is no chunk size or overlap setting, and there is no Python binding, so the pipeline calls it through `F.expr`.
 
@@ -134,7 +183,7 @@ dp.create_auto_cdc_flow(
 
 ### Flattening the chunks
 
-Because the index requires one row per chunk, the pipeline creates a `chunks` table and keeps it in sync with a second Auto CDC flow, this time from a snapshot:
+Because the index requires one row per chunk, the pipeline creates a `chunks` table and keeps it in sync with a second Auto CDC flow, this time [from a snapshot](https://docs.databricks.com/aws/en/ldp/developer/ldp-python-ref-apply-changes-from-snapshot):
 
 ```python
 @dp.temporary_view()
@@ -214,6 +263,8 @@ except ResourceAlreadyExists:
 
 Embeddings are generated automatically by the `databricks-qwen3-embedding-0-6b` endpoint, the model Databricks [recommends](https://docs.databricks.com/aws/en/ai-search/create-ai-search) for standard endpoints like this one. The model [handles up to about 32K tokens](https://docs.databricks.com/aws/en/machine-learning/foundation-model-apis/supported-models), which leaves plenty of room for the context that `ai_prep_search` adds to each chunk.
 
+Databricks also registers this model in [Unity Gateway](https://docs.databricks.com/aws/en/unity-gateway/), its layer for governed access to models, as the model service `system.ai.qwen3-embedding-0-6b`. The index can't use that name: `embedding_model_endpoint_name` only accepts serving endpoints, and the model service name fails with "Model Serving endpoint system.ai.qwen3-embedding-0-6b was not found". The app in step 5 does go through Unity Gateway.
+
 > The `databricks-qwen3-embedding-0-6b` endpoint is in Public Preview. If your workspace doesn't have it, use `databricks-gte-large-en` instead. With an 8,192-token window, it is a good alternative for an English wiki. It handles English only, while Qwen3 supports over 100 languages, so keep Qwen3 for a multilingual wiki.
 
 ### The refresh job
@@ -282,6 +333,22 @@ In the table, the index sync is the largest part of a full refresh. A daily upda
 
 Note that these are text-only numbers. Processing images costs far more, so streaming becomes even more important, but this is a topic for the follow-up article.
 
+### Querying the index from SQL
+
+Once the first job run has finished, the index can be tested without any app. The [`vector_search`](https://docs.databricks.com/aws/en/sql/language-manual/functions/vector_search) function queries an AI Search index in the SQL editor:
+
+```sql
+SELECT path, chunk_to_retrieve
+FROM vector_search(
+  index => 'main.confluence_rag.chunks_index',
+  query_text => 'What are the stages of the MLOps workflow?',
+  query_type => 'HYBRID',
+  num_results => 5
+)
+```
+
+Replace `main.confluence_rag` with your catalog and schema. The query runs the same hybrid search as the app's search tool in step 5 and returns the five best chunks. That makes it a powerful quick check of whether a question finds the right pages. When the app gives a poor answer, the same query indicates whether retrieval or the model is at fault. The function is in Public Preview.
+
 ## Step 5: the agent and the app
 
 With the chunks indexed, the last step builds the chat app: an agent that searches the index and answers from what it finds. It consists of three components:
@@ -322,7 +389,7 @@ def search_wiki(query: str) -> list[dict]:
 
 
 agent = create_agent(
-    model=ChatDatabricks(endpoint=os.environ["LLM_ENDPOINT"]),
+    model=ChatDatabricks(model=os.environ["LLM_MODEL"], use_ai_gateway=True),
     tools=[search_wiki],
     system_prompt=SYSTEM_PROMPT,
 )
@@ -330,7 +397,19 @@ agent = create_agent(
 
 `mlflow.langchain.autolog()` traces every call to the MLflow experiment the bundle creates.
 
-The model reads the tool's docstring to decide when to search, and writes its own query. With `HYBRID`, the index does a [hybrid search](https://docs.databricks.com/aws/en/ai-search/query-ai-search), by meaning and by exact words at once, so it catches pages that paraphrase the question as well as pages that repeat its terms. It returns the five best chunks. The system prompt instructs the model to search before every answer, and to repeat the search when the results look thin. It should answer only from the results, cite the pages it used, and say so when the wiki has no answer. The two environment variables are set in `app.yml`, which also points `LLM_ENDPOINT` at the serving endpoint for Claude Sonnet 4.6 and gives the app permission to query it.
+The model reads the tool's docstring to decide when to search, and writes its own query. With `HYBRID`, the index does a [hybrid search](https://docs.databricks.com/aws/en/ai-search/query-ai-search), by meaning and by exact words at once, so it catches pages that paraphrase the question as well as pages that repeat its terms. It returns the five best chunks. The system prompt instructs the model to search before every answer, and to repeat the search when the results look thin. It should answer only from the results, cite the pages it used, and say so when the wiki has no answer. The two environment variables are set in `app.yml`. `LLM_MODEL` holds `system.ai.claude-sonnet-4-6`, the Unity Gateway model service for Claude Sonnet 4.6, and `use_ai_gateway=True` sends the model calls through Unity Gateway. `app.yml` declares the model service as an app resource:
+
+```yaml
+        - name: llm
+          uc_securable:
+            securable_full_name: system.ai.claude-sonnet-4-6
+            securable_type: MODEL_SERVICE
+            permission: EXECUTE
+```
+
+This grants the app's service principal `EXECUTE` on the model service, so access to the model is a Unity Catalog grant like any other. Every call also shows up in the `system.ai_gateway.usage` system table.
+
+> Databricks CLI 1.19 warns that `MODEL_SERVICE` is an invalid value for `securable_type`. The warning is harmless: the deploy goes through and the app gets the model service.
 
 The chat UI requires streamed responses, so the server registers a stream handler:
 
@@ -380,7 +459,7 @@ The result of this article is a working chat app over your company's wiki in abo
 
 The app is minimal on purpose, and a real deployment probably needs more:
 
-- **Images and attachments:** Databricks has the tools (`ai_query` with a vision model, and `ai_parse_document`), but the connector ships no files.
+- **Images and attachments:** Databricks has the tools ([`ai_query`](https://docs.databricks.com/aws/en/sql/language-manual/functions/ai_query) with a vision model, and [`ai_parse_document`](https://docs.databricks.com/aws/en/sql/language-manual/functions/ai_parse_document)), but the connector ships no files.
 - **Prompt management:** using the [MLflow Prompt Registry](https://docs.databricks.com/aws/en/mlflow3/genai/prompt-version-mgmt/prompt-registry) would version the system prompt.
 - **Chat history:** the UI runs in ephemeral mode and keeps none. A [Lakebase instance](https://docs.databricks.com/aws/en/oltp/projects) is the perfect place to store it.
 - **Evaluation:** nothing quantifies the quality of the answers yet.
